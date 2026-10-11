@@ -6,6 +6,8 @@
 
 只用 Python 标准库，不联网，不调用模型。
 
+> 0.3.0 起参考了 [白话 Baihua](https://huggingface.co/Roland-Wayne/Baihua-Gemma4-E4B)（Apache-2.0）提示词中“保留语气词与长句”“按事实提纲写作、不加比喻和解释”的思路，未包含其提示词原文和模型。
+>
 > 本项目基于 [sloptrim](https://github.com/seyedehsanhadi/sloptrim)（Apache-2.0）修改，中文模式目录参照 [Humanizer-zh](https://github.com/op7418/Humanizer-zh)（MIT）的汉化思路。与两位原作者无关联，也未获其背书。详见 [NOTICE](NOTICE)。
 
 ## 和两个上游项目的关系
@@ -15,7 +17,7 @@
 | 语言 | 英文 | 中文 | 中文（英文自动转交原版） |
 | 形式 | Skill + 检测脚本 + 钩子 | 只有 Skill 提示词 | Skill + 检测脚本 |
 | 打分 | 有，按分数分档改写 | 无 | 有，沿用原版思路，中文重新校准 |
-| 模式数 | 71 | 31 | 81 个编号（删 7 个英文专属，新增 10 个中文，其中 2 条需通读判断） |
+| 模式数 | 71 | 31 | 85 个编号（删 7 个英文专属，新增 14 个中文，其中 2 条需通读判断） |
 
 汉化方法沿用 Humanizer-zh 汉化 Humanizer 的做法：
 
@@ -47,7 +49,14 @@ Codex 用户把目录放到 `~/.codex/skills/` 下。重启后说“帮我去一
 python scripts/detect_zh.py 文章.md              # 输出 JSON 报告
 python scripts/detect_zh.py --lyrics 歌词.txt    # 歌词模式
 python scripts/detect_zh.py --clean 文章.md > 干净.md
+python scripts/detect_zh.py --clean --zh-digits 文章.md > 干净.md   # 再把时间价钱改成阿拉伯数字
 ```
+
+`--clean` 在中文文档里会：去掉零宽字符、规范空格、把夹在汉字之间的半角标点改成全角、把包着中文的直引号改成“”。代码块不动。
+
+## 写作模式
+
+让 Skill “写一篇……”时，它会先向你要真实材料（发生了什么、细节、原话、你的看法、用途篇幅）。你说“随便写”也可以，编出来的细节会在文末列出，提醒你替换。写完必须跑脚本收尾：修标点和数字，再按“句首缺主语”“状态没说完”“句式雷同”“同头三连”的提示改完才交付。
 
 报告里最重要的是 `_metrics.ai_tell_score`、`ai_tell_band` 和 `confidence`：
 

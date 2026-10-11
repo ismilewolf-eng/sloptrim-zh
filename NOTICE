@@ -151,5 +151,12 @@ parallelism, 随着……的发展 openers, formula endings) of Humanizer-zh by 
 license text is reproduced in references/HUMANIZER-ZH-LICENSE.txt. All worked
 examples in sloptrim-zh are original.
 
+Version 0.3.0 adapts, in its own words, two ideas from the task prompts of
+Baihua-Gemma4-E4B by Roland Wayne (https://huggingface.co/Roland-Wayne/Baihua-Gemma4-E4B,
+Apache License 2.0): keep natural modal particles, pauses, repetition and long
+sentences when rewriting; and when writing from scratch, work from the user's
+facts, views and outline without adding new opinions, headings, parallelism,
+metaphors or explanations. No prompt text or model weights are included.
+
 sloptrim-zh is not affiliated with or endorsed by the sloptrim or
 Humanizer-zh authors.

@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import detect as D  # noqa: E402  upstream sloptrim detector, unmodified
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MAX_SAMPLES = 3
 HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 LATIN_WORD = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
@@ -205,6 +205,11 @@ SUIZHE = (
 )
 FOUR_CHAR_RUN = re.compile(
     r"[\u4e00-\u9fff]{4}(?:、[\u4e00-\u9fff]{4}){2,}(?=[，。！？；\n,]|$)", re.M)
+# 7: same-head triads such as 一直在问、一直在走、一直在看. Soft: deliberate
+# parallelism exists, but in plain narrative it reads as composed.
+TRIAD = re.compile(r"([\u4e00-\u9fff]{2,3})[\u4e00-\u9fff]{1,3}[、，,]\1[\u4e00-\u9fff]{1,3}[、，,]\1[\u4e00-\u9fff]{1,3}")
+HALF_PUNCT = {",": "，", ";": "；", ":": "：", "?": "？", "!": "！"}
+HALF_BETWEEN_HAN = re.compile(r"(?<=[\u4e00-\u9fff])[,;:?!](?=[\u4e00-\u9fff])")
 BEI = re.compile(r"被(?![子窝褥单套])")
 ZH_EM_DASH = re.compile(r"——|—")
 ZH_MIXED_PUNCT = r"(?<=[\u4e00-\u9fff])[,;:?!](?=[\u4e00-\u9fff])|\"[\u4e00-\u9fff][^\"\n]{0,30}\""
@@ -223,6 +228,60 @@ OVERCLAIM = (
     r"首次|首个|唯一|最优|遥遥领先|颠覆性|革命性|碾压|全面超越|填补了?[^，。！？\n]{0,6}空白|"
     r"国际领先|国内首创|显著(?:提升|优于|提高)|彻底解决|完美(?:解决|实现)"
 )
+
+# 82: Chinese numerals for clock times, durations and prices in narrative.
+# Style preference, not an AI tell: report only, and --zh-digits rewrites them.
+# Idioms (一五一十, 三三两两) and "一点" meaning "a little" are left alone.
+ZH_NUM = "[零一二两三四五六七八九十百]"
+TIME_WORD = r"(?:早上|上午|中午|下午|晚上|凌晨|傍晚|快|到|约|大概|差不多|才|都|已经|是)"
+ZH_DIGIT_RE = re.compile(
+    # Clock time: needs a time word before it, or 钟/半/多/左右 after it, so
+    # "好一点了" (a little better) is never read as one o'clock.
+    rf"(?P<tw>{TIME_WORD})(?P<a>{ZH_NUM}{{1,3}})(?=点)"
+    rf"|(?<!{ZH_NUM})(?P<b>{ZH_NUM}{{1,3}})(?=点(?:钟|半|多|左右))"
+    # Durations and prices.
+    rf"|(?<!{ZH_NUM})(?P<c>{ZH_NUM}{{1,4}})(?=(?:个)?多?(?:分钟|小时)|块钱?|元)"
+    # Clock time opening a sentence or clause: 九点到的、十点出发。
+    rf"|(?:^|(?<=[。！？，,\n们我他她]))(?P<d>{ZH_NUM}{{1,3}})(?=点(?:到|的|了|出发|开始|起))", re.M)
+# 83: sentence that opens on a bare verb or time, with no subject. Report only:
+# the fix needs reading, and many such sentences are fine in context.
+SUBJECT_DROP = re.compile(
+    rf"(?:^|(?<=[。！？\n]))\s*(?:(?:早上|上午|中午|下午|晚上|今天|昨天|然后|后来|接着|[0-9]{{1,2}}点|{ZH_NUM}{{1,3}}点)[，,]?)?"
+    r"(?:(?:在|从)[^，。！？\n]{1,6})?(?:先|又|就|再)?"
+    r"(?:(?:去|到|吃|看|排|坐|买|进)(?:了|的)|带[^，。！？\n]{1,4}去(?:了|的))", re.M)
+
+
+# 84: a state left hanging before a comma, e.g. "在我背上快睡着，嘴里还嘟囔了一句".
+# It needs 了 or 时 ("快睡着了" / "快睡着时"). Report only.
+UNFINISHED_STATE = re.compile(r"快(?:要)?[一-鿿]{1,2}着(?=[，,])")
+
+
+def zh_numeral_value(s: str):
+    """Value of a Chinese numeral up to 999; None if it is not a plain number."""
+    digits = {"零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    total, cur = 0, 0
+    for ch in s:
+        if ch in digits:
+            cur = digits[ch]
+        elif ch == "十":
+            total += (cur or 1) * 10
+            cur = 0
+        elif ch == "百":
+            total += (cur or 1) * 100
+            cur = 0
+        else:
+            return None
+    return total + cur
+
+
+def zh_digits(text: str) -> str:
+    """Rewrite clock times, durations and prices to Arabic digits (sense-preserving)."""
+    def sub(m):
+        num = m.group("a") or m.group("b") or m.group("c") or m.group("d")
+        v = zh_numeral_value(num)
+        return (m.group("tw") or "") + (str(v) if v is not None else num)
+    return ZH_DIGIT_RE.sub(sub, text)
+
 
 # 77, lyrics mode only: abstract imagery that fills Chinese AI lyrics without
 # moving the story. One or two are ordinary; three or more distinct is a cluster.
@@ -244,7 +303,8 @@ def zh_zero_width(text: str) -> list[str]:
 
 
 def clean_zh(text: str, syntax: str = "markdown") -> str:
-    """Upstream clean, then drop ZWSP/WJ that sit beside Han in a Chinese document."""
+    """Upstream clean, then, in a Chinese document, drop ZWSP/WJ beside Han and turn
+    half-width , ; : ? ! between two Han characters into full-width."""
     cleaned = D.clean_text(text, syntax=syntax)
     if is_chinese(cleaned) and not KANA.search(cleaned):
         mapper = D._map_latex if syntax == "latex" else D._map_code
@@ -256,6 +316,9 @@ def clean_zh(text: str, syntax: str = "markdown") -> str:
             return "\x00%d\x00" % (len(protected) - 1)
         masked = mapper(cleaned, keep)
         masked = ZH_ZW.sub("", masked)
+        masked = HALF_BETWEEN_HAN.sub(lambda m: HALF_PUNCT[m.group(0)], masked)
+        # Paired straight double quotes around Chinese text become “ ”.
+        masked = re.sub(r'"([^"\n]*[一-鿿][^"\n]*)"', "“\\1”", masked)
         cleaned = re.sub(r"\x00(\d+)\x00", lambda m: protected[int(m.group(1))], masked)
     return cleaned
 
@@ -338,6 +401,22 @@ def detect_opener_repetition(text: str) -> list[str]:
     return hits
 
 
+def detect_paragraph_openers(text: str) -> list[str]:
+    """85: three or more paragraphs open with the same two characters, or three
+    sentences in a row do. Typical after subjects are added back everywhere."""
+    hits = []
+    heads = collections.Counter(p[:2] for p in split_paragraphs(text) if han_count(p[:2]) == 2)
+    for head, n in heads.items():
+        if n >= 3:
+            hits.append("段首“%s”×%d" % (head, n))
+    sents = [s_[:2] for s_ in split_sentences(text) if han_count(s_[:2]) == 2]
+    for i in range(len(sents) - 2):
+        if sents[i] == sents[i + 1] == sents[i + 2]:
+            hits.append("连续三句以“%s”开头" % sents[i])
+            break
+    return hits
+
+
 def detect_dash_overuse(text: str) -> list[str]:
     return [p[:60] for p in split_paragraphs(text) if len(ZH_EM_DASH.findall(p.replace("——", "—"))) >= 2]
 
@@ -377,9 +456,9 @@ def detect_degenerate_repetition(text: str, n: int = 8) -> dict:
 # ------------------------------------------------------------------- scoring
 SCORE_DECISIVE = {"62", "63", "64", "65", "66", "47", "50", "48"}
 SCORE_STRONG = {"16", "20", "21", "24", "18", "27", "30", "5", "69", "71"}
-SCORE_SOFT = {"37", "57", "2", "23", "75", "9", "78"}
-SCORE_REPORT_ONLY = {"19", "22", "42", "54", "58", "17", "68", "74", "79"}
-SCORE_STYLE_ONLY = {"60"}
+SCORE_SOFT = {"37", "57", "2", "23", "75", "9", "78", "7"}
+SCORE_REPORT_ONLY = {"19", "22", "42", "54", "58", "17", "68", "74", "79", "83", "84", "85"}
+SCORE_STYLE_ONLY = {"60", "82"}
 SCORE_RHYTHM = {"40"}
 SCORE_MIN_UNITS = 120
 ESCALATOR = set(range(1, 40)) | {47, 48, 49, 50, 51, 69, 72, 73, 76, 77}
@@ -387,7 +466,7 @@ CONTENT_CAP, RHYTHM_CAP, VOCAB_CAP, VOCAB_FLOOR = 48.0, 18.0, 26.0, 6.0
 
 # Rules that misfire on song lyrics, where repetition, short even lines and
 # four-character runs are the form rather than a defect.
-LYRICS_OFF = {"71", "40", "44", "42", "75", "37", "9"}
+LYRICS_OFF = {"71", "40", "44", "42", "75", "37", "9", "7", "85"}
 
 
 def _fam(key: str) -> str:
@@ -520,9 +599,18 @@ def scan_zh(raw_text: str, syntax: str = "markdown", lyrics: bool = False) -> di
     _hit(result, "73_jinxing_verb", "“进行＋动词”", jinxing if len(jinxing) >= 2 else [])
     _hit(result, "72_de_stacking", "层叠的“的”", detect_de_stacking(text))
     _hit(result, "74_bei_stacking", "被字句堆叠", detect_bei_stacking(text))
+    if not lyrics:
+        _hit(result, "82_zh_numerals", "时间、时长、价钱用了中文数字（偏好，仅提示）",
+             [m.group(0) + "…" for m in ZH_DIGIT_RE.finditer(text)])
+        _hit(result, "84_unfinished_state", "状态没说完（快睡着，→快睡着了／快睡着时，仅提示）",
+             [text[max(0, m.start() - 6):m.end() + 1] for m in UNFINISHED_STATE.finditer(text)])
+        _hit(result, "83_subject_drop", "句首缺主语（仅提示，需通读判断）",
+             [text[m.start():m.end() + 8].strip() for m in SUBJECT_DROP.finditer(text)])
+    _hit(result, "7_parallel_triad", "同头三连排比", [m.group(0) for m in TRIAD.finditer(text)])
     _hit(result, "75_four_char_parallel", "四字词排比", [m.group(0) for m in FOUR_CHAR_RUN.finditer(text)])
     _hit(result, "54_hedge_stacking", "限定词堆叠", detect_hedge_stacking(text))
     _hit(result, "37_transition_cluster", "连接词扎堆", detect_transition_clusters(text))
+    _hit(result, "85_opener_sameness", "段首或连续句首雷同（仅提示）", detect_paragraph_openers(text))
     _hit(result, "42_opener_repetition", "句首复读", detect_opener_repetition(text))
     _hit(result, "58_em_dash_overuse", "破折号过多（每段≥2）", detect_dash_overuse(text))
     emojis = D.EMOJI.findall(text)
@@ -615,6 +703,7 @@ USAGE = """用法：detect_zh.py [--clean] [--lyrics] [--] [FILE]
 扫描 FILE（不给则读 stdin），输出 JSON 报告。中文文本走中文规则，其他文本交给上游 detect.py。
 
   --clean   输出清理后的文本（去零宽字符、规范空格、裁剪空白），不输出报告
+  --zh-digits  与 --clean 一起用：把时间、时长、价钱的中文数字改成阿拉伯数字（九点→9点）
   --lyrics  歌词模式：去掉段落标签，关闭重复、句长单调、四字排比等对歌词不适用的规则
   --        之后的参数一律当作文件名
   --help    显示本说明
@@ -632,7 +721,7 @@ def main() -> int:
             paths.append(arg)
         elif arg == "--":
             literal = True
-        elif arg in ("--clean", "--lyrics"):
+        elif arg in ("--clean", "--lyrics", "--zh-digits"):
             flags.add(arg)
         elif arg in ("--help", "-h"):
             sys.stdout.write(USAGE)
@@ -652,6 +741,8 @@ def main() -> int:
     syntax = "latex" if paths and os.path.splitext(paths[0])[1].lower() == ".tex" else "markdown"
     if "--clean" in flags:
         cleaned = clean_zh(text, syntax=syntax)
+        if "--zh-digits" in flags:
+            cleaned = zh_digits(cleaned)
         if text.endswith("\n") and not cleaned.endswith("\n"):
             cleaned += "\n"
         sys.stdout.write(cleaned.replace("\n", newline) if newline != "\n" else cleaned)

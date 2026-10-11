@@ -51,6 +51,10 @@ CASES = [
     ("73_jinxing_verb", "我们对系统进行全面测试，并对配置进行调整。", "我们测试系统，调整配置。"),
     ("74_bei_stacking", "该问题被社区报告，被认为与内存有关。", "社区报告了这个问题。"),
     ("75_four_char_parallel", "方案稳定可靠、快速响应、易于维护。", "方案很稳定。"),
+    ("7_parallel_triad", "他一直在问、一直在走、一直在看。", "他一直在问问题。"),
+    ("84_unfinished_state", "他在我背上快睡着，嘴里还嘟囔了一句。", "他在我背上快睡着时，嘴里还嘟囔了一句。"),
+    ("85_opener_sameness", "我们去了河马馆。\n\n我们去了孔雀园。\n\n我们去了海狮馆。",
+     "我们去了河马馆。\n\n中午吃了烤肠。\n\n排队用了很久。"),
     ("78_officialese", "我清醒地认识到不足，今后将进一步加强学习。", "我知道自己还有不足，打算多学习。"),
     ("79_overclaim", "本方法是首个解决该问题的工作，性能显著提升。", "本方法在测试集上提高了 3.2 个百分点。"),
     ("76_suizhe_opener", "随着科技的不断发展，人们的生活改变了。", "随着文件增加，检索变慢了。"),
@@ -118,6 +122,43 @@ class Routing(unittest.TestCase):
         out = subprocess.run([sys.executable, SCRIPT, "--clean"], input=dirty,
                              capture_output=True, text=True, encoding="utf-8").stdout
         self.assertEqual(out, "文件已经保存。")
+
+
+class CleanPunct(unittest.TestCase):
+    def test_half_width_between_han_fixed(self):
+        out = subprocess.run([sys.executable, SCRIPT, "--clean"], input="他五岁半,昨天说要去。代码`a,b`不动。",
+                             capture_output=True, text=True, encoding="utf-8").stdout
+        self.assertEqual(out, "他五岁半，昨天说要去。代码`a,b`不动。")
+
+
+class CleanQuotes(unittest.TestCase):
+    def test_straight_quotes_around_chinese(self):
+        out = subprocess.run([sys.executable, SCRIPT, "--clean"], input='他说："河马在干什么呀。"代码`"a"`不动。',
+                             capture_output=True, text=True, encoding="utf-8").stdout
+        self.assertEqual(out, '他说：“河马在干什么呀。”代码`"a"`不动。')
+
+
+class ZhDigits(unittest.TestCase):
+    def test_times_durations_prices(self):
+        self.assertEqual(Z.zh_digits("我们早上九点到的，坐了四十分钟地铁，一份炒饭二十八块钱。快五点闭园。"),
+                         "我们早上9点到的，坐了40分钟地铁，一份炒饭28块钱。快5点闭园。")
+
+    def test_leaves_idioms_and_a_little(self):
+        t = "他好一点了，一五一十地说，等了一会儿，十来分钟。"
+        self.assertEqual(Z.zh_digits(t), t)
+
+    def test_cli_flag(self):
+        out = subprocess.run([sys.executable, SCRIPT, "--clean", "--zh-digits"], input="我们九点到的,门口人很多。",
+                             capture_output=True, text=True, encoding="utf-8").stdout
+        self.assertEqual(out, "我们9点到的，门口人很多。")
+
+
+class SubjectDrop(unittest.TestCase):
+    def test_flags_bare_openers(self):
+        self.assertIn("83_subject_drop", keys("先去的猴山。中午在园里吃的盒饭。"))
+
+    def test_quiet_with_subject(self):
+        self.assertNotIn("83_subject_drop", keys("我们先去了猴山。中午我们在园里吃了盒饭。"))
 
 
 class Lyrics(unittest.TestCase):
