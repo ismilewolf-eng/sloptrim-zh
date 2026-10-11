@@ -15,13 +15,13 @@
 | 语言 | 英文 | 中文 | 中文（英文自动转交原版） |
 | 形式 | Skill + 检测脚本 + 钩子 | 只有 Skill 提示词 | Skill + 检测脚本 |
 | 打分 | 有，按分数分档改写 | 无 | 有，沿用原版思路，中文重新校准 |
-| 模式数 | 71 | 31 | 79 个编号（删 7 个英文专属，新增 8 个中文） |
+| 模式数 | 71 | 31 | 81 个编号（删 7 个英文专属，新增 10 个中文，其中 2 条需通读判断） |
 
 汉化方法沿用 Humanizer-zh 汉化 Humanizer 的做法：
 
 1. 中文同样成立的模式保留，例句用中文重写；
 2. 英文专属的删掉（缩写、标题大小写、分号括号统计等）；
-3. 补上中文特有的：层叠的“的”、“进行＋动词”、被字句堆叠、四字词排比、“随着……的发展”开头、官腔套话，以及结论强度词提示（思路参考 Supervisor-Skills 的 paper-polish）；
+3. 补上中文特有的：层叠的“的”、“进行＋动词”、被字句堆叠、四字词排比、“随着……的发展”开头、官腔套话、结论强度词提示（思路参考 Supervisor-Skills 的 paper-polish），以及两条只能读出来的：旁白式俏皮点评、过度压缩；
 4. 每条附“保留”边界，避免机械地删排比、删破折号；
 5. 优先级：先保事实和确定程度，再顾文体和作者声音，最后才改表达。
 
@@ -30,13 +30,13 @@
 ## 安装
 
 ```bash
-git clone https://github.com/<你的账号>/sloptrim-zh.git ~/.claude/skills/sloptrim-zh
+git clone https://github.com/ismilewolf-eng/sloptrim-zh.git ~/.claude/skills/sloptrim-zh
 ```
 
 Windows PowerShell：
 
 ```powershell
-git clone https://github.com/<你的账号>/sloptrim-zh.git $HOME\.claude\skills\sloptrim-zh
+git clone https://github.com/ismilewolf-eng/sloptrim-zh.git $HOME\.claude\skills\sloptrim-zh
 ```
 
 Codex 用户把目录放到 `~/.codex/skills/` 下。重启后说“帮我去一下 AI 味”或调用 `/sloptrim-zh`。
@@ -79,6 +79,12 @@ python scripts/detect_zh.py --clean 文章.md > 干净.md
 - 人写样本缺少当代散文和网络文本。
 
 校准语料不随仓库分发。
+
+## 分数怎么看
+
+分数越低，命中的已知套路越少，但**低分不等于没有 AI 味**。到 20 分以下就够了，不要为了压到 0 分硬改，否则容易改成电报体（第 81 条）。20 分以下之后靠通读判断，重点查第 80 条“旁白式俏皮点评”和第 81 条“过度压缩”，这两种问题检测脚本抓不到。
+
+[examples/带娃日记.md](examples/带娃日记.md) 记录了一篇文章从 0 分但有 AI 味，到压过头，再到改好的全过程。
 
 ## 测试
 
