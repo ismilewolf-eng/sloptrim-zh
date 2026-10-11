@@ -51,6 +51,8 @@ CASES = [
     ("73_jinxing_verb", "我们对系统进行全面测试，并对配置进行调整。", "我们测试系统，调整配置。"),
     ("74_bei_stacking", "该问题被社区报告，被认为与内存有关。", "社区报告了这个问题。"),
     ("75_four_char_parallel", "方案稳定可靠、快速响应、易于维护。", "方案很稳定。"),
+    ("78_officialese", "我清醒地认识到不足，今后将进一步加强学习。", "我知道自己还有不足，打算多学习。"),
+    ("79_overclaim", "本方法是首个解决该问题的工作，性能显著提升。", "本方法在测试集上提高了 3.2 个百分点。"),
     ("76_suizhe_opener", "随着科技的不断发展，人们的生活改变了。", "随着文件增加，检索变慢了。"),
 ]
 
@@ -81,6 +83,14 @@ class Scoring(unittest.TestCase):
     def test_two_decisive_families_floor(self):
         text = "希望这对你有帮助！截至我的训练数据，情况如此。" * 3
         self.assertGreaterEqual(Z.scan(text)["_metrics"]["ai_tell_score"], 65)
+
+    def test_overclaim_is_report_only(self):
+        r = Z.scan("本方法是国内首创。")
+        self.assertIn("79_overclaim", r)
+        self.assertEqual(r["_metrics"]["ai_tell_score"], 0)
+
+    def test_officialese_needs_two_distinct(self):
+        self.assertNotIn("78_officialese", keys("我们始终坚持原则。"))
 
     def test_report_only_does_not_score(self):
         text = "他可能也许会来。" * 2
