@@ -55,6 +55,8 @@ CASES = [
     ("84_unfinished_state", "他在我背上快睡着，嘴里还嘟囔了一句。", "他在我背上快睡着时，嘴里还嘟囔了一句。"),
     ("85_opener_sameness", "我们去了河马馆。\n\n我们去了孔雀园。\n\n我们去了海狮馆。",
      "我们去了河马馆。\n\n中午吃了烤肠。\n\n排队用了很久。"),
+    ("86_vague_reference", "系统会备份配置和日志。它会在每周日清理。这意味着旧版本会丢失。",
+     "系统会备份配置和日志。日志每周日清理，旧版本会因此丢失。"),
     ("78_officialese", "我清醒地认识到不足，今后将进一步加强学习。", "我知道自己还有不足，打算多学习。"),
     ("79_overclaim", "本方法是首个解决该问题的工作，性能显著提升。", "本方法在测试集上提高了 3.2 个百分点。"),
     ("76_suizhe_opener", "随着科技的不断发展，人们的生活改变了。", "随着文件增加，检索变慢了。"),
@@ -101,6 +103,15 @@ class Scoring(unittest.TestCase):
         r = Z.scan(text)
         self.assertIn("54_hedge_stacking", r)
         self.assertEqual(r["_metrics"]["ai_tell_score"], 0)
+
+    def test_vague_reference_needs_two_and_does_not_score(self):
+        self.assertNotIn("86_vague_reference", keys("日志每周日清理。这意味着旧版本会丢失。"))
+        r = Z.scan("它会自动保存。这说明配置没丢。")
+        self.assertIn("86_vague_reference", r)
+        self.assertEqual(r["_metrics"]["ai_tell_score"], 0)
+
+    def test_vague_reference_off_in_lyrics(self):
+        self.assertNotIn("86_vague_reference", keys("它会离开。这意味着结束。", lyrics=True))
 
 
 class Routing(unittest.TestCase):

@@ -158,5 +158,12 @@ sentences when rewriting; and when writing from scratch, work from the user's
 facts, views and outline without adding new opinions, headings, parallelism,
 metaphors or explanations. No prompt text or model weights are included.
 
-sloptrim-zh is not affiliated with or endorsed by the sloptrim or
-Humanizer-zh authors.
+Version 0.4.0 adapts, in its own words, ideas from the dbs-plain-writing skill
+of dbskill by dontbesilent (https://github.com/dontbesilent2025/dbskill,
+CC BY-NC 4.0): edit only the requested span and keep the user's own edits
+locked; order explanatory text by what the reader needs first; and check each
+sentence for its actor, references, consistent names and which action a
+condition applies to. No text from dbskill is included.
+
+sloptrim-zh is not affiliated with or endorsed by the sloptrim,
+Humanizer-zh or dbskill authors.
