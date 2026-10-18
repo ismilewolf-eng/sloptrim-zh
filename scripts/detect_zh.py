@@ -255,6 +255,13 @@ SUBJECT_DROP = re.compile(
 # It needs 了 or 时 ("快睡着了" / "快睡着时"). Report only.
 UNFINISHED_STATE = re.compile(r"快(?:要)?[一-鿿]{1,2}着(?=[，,])")
 
+# 86: a sentence that opens on a bare pronoun and goes straight into a verb
+# ("它会……" "这意味着……"), so the reader has to guess what it points back to.
+# Report only, and only from two hits up: one such sentence is usually clear.
+VAGUE_REFERENCE = re.compile(
+    r"(?:^|(?<=[。！？\n]))\s*(?:它们?|这些|这样|这个|这|此|上述|以上)"
+    r"(?:也|还|就|又)?(?:会|能|可以|可能|将|让|使得?|意味着|说明|导致|需要|要|带来|造成|决定)", re.M)
+
 
 def zh_numeral_value(s: str):
     """Value of a Chinese numeral up to 999; None if it is not a plain number."""
@@ -457,7 +464,7 @@ def detect_degenerate_repetition(text: str, n: int = 8) -> dict:
 SCORE_DECISIVE = {"62", "63", "64", "65", "66", "47", "50", "48"}
 SCORE_STRONG = {"16", "20", "21", "24", "18", "27", "30", "5", "69", "71"}
 SCORE_SOFT = {"37", "57", "2", "23", "75", "9", "78", "7"}
-SCORE_REPORT_ONLY = {"19", "22", "42", "54", "58", "17", "68", "74", "79", "83", "84", "85"}
+SCORE_REPORT_ONLY = {"19", "22", "42", "54", "58", "17", "68", "74", "79", "83", "84", "85", "86"}
 SCORE_STYLE_ONLY = {"60", "82"}
 SCORE_RHYTHM = {"40"}
 SCORE_MIN_UNITS = 120
@@ -606,6 +613,9 @@ def scan_zh(raw_text: str, syntax: str = "markdown", lyrics: bool = False) -> di
              [text[max(0, m.start() - 6):m.end() + 1] for m in UNFINISHED_STATE.finditer(text)])
         _hit(result, "83_subject_drop", "句首缺主语（仅提示，需通读判断）",
              [text[m.start():m.end() + 8].strip() for m in SUBJECT_DROP.finditer(text)])
+        vague = [text[m.start():m.end() + 8].strip() for m in VAGUE_REFERENCE.finditer(text)]
+        _hit(result, "86_vague_reference", "句首指代不清（它会、这意味着，仅提示，需通读判断）",
+             vague if len(vague) >= 2 else [])
     _hit(result, "7_parallel_triad", "同头三连排比", [m.group(0) for m in TRIAD.finditer(text)])
     _hit(result, "75_four_char_parallel", "四字词排比", [m.group(0) for m in FOUR_CHAR_RUN.finditer(text)])
     _hit(result, "54_hedge_stacking", "限定词堆叠", detect_hedge_stacking(text))
